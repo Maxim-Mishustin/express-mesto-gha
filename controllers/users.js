@@ -1,106 +1,183 @@
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const User = require('../models/user');
+const { authKey } = require('../utils/constants');
+// Импорты констант
+const { CREATED_CODE } = require('../utils/constants');
+const BadRequestError = require('../errors/BadRequestError');
+const NotFoundError = require('../errors/NotFoundError');
+const AuthenticationError = require('../errors/AuthenticationError');
+const DataConflictError = require('../errors/DataConflictError');
 
-// Пользователи
-module.exports.getUsers = (req, res) => {
+// Регистрация пользователя
+function registrationUser(req, res, next) {
+  const {
+    email, password, name, about, avatar,
+  } = req.body;
+  bcrypt
+    .hash(password, 10)
+    .then((hash) => User.create({
+      email,
+      password: hash,
+      name,
+      about,
+      avatar,
+    }))
+    .then((user) => {
+      const { _id } = user;
+      return res.status(CREATED_CODE).send({
+        email,
+        name,
+        about,
+        avatar,
+        _id,
+      });
+    })
+    .catch((err) => {
+      if (err.code === 11000) {
+        next(
+          new DataConflictError(
+            'Пользователь с данным электронным адресом уже зарегистрирован',
+          ),
+        );
+      } else if (err.name === 'ValidationError') {
+        next(
+          new BadRequestError(
+            'Передача некорректных данных при регистрации пользователя',
+          ),
+        );
+      } else {
+        next(err);
+      }
+    });
+}
+
+// Логин пользователя
+function login(req, res, next) {
+  const { email, password } = req.body;
+  User.findUserByCredentials(email, password)
+    .then(({ _id: userId }) => {
+      if (userId) {
+        const token = jwt.sign({ userId }, authKey, {
+          expiresIn: '7d',
+        });
+        return res.send({ _id: token });
+      }
+      throw new AuthenticationError('Неправильная почта или пароль');
+    })
+    .catch(next);
+}
+
+// Получение всех пользователей
+function getUsersInfo(_, res, next) {
   User.find({})
-    .then((users) => res.send(users))
-    .catch(() => res.status(500).send({ message: 'Ошибка по умолчанию' }));
-};
+    .then((users) => res.send({ users }))
+    .catch(next);
+}
 
-// пользователь по ID
-module.exports.getUserId = (req, res) => {
-  User
-    .findById(req.params.userId)
-    .orFail()
-    .then((user) => res.status(200).send(user))
+// Поиск пользователя ID
+function getUserId(req, res, next) {
+  const { id } = req.params;
+  User.findById(id)
+    .then((user) => {
+      if (user) return res.send({ user });
+      throw new NotFoundError('Пользователь c указанным ID не найден');
+    })
     .catch((err) => {
       if (err.name === 'CastError') {
-        return res
-          .status(400)
-          .send({
-            message: 'Переданы некорректные данные при поиске пользователя',
-          });
-      }
-
-      if (err.name === 'DocumentNotFoundError') {
-        return res
-          .status(404)
-          .send({
-            message: 'Пользователь c указанным _id не найден',
-          });
-      }
-
-      return res.status(500).send({ message: 'Ошибка по умолчанию' });
-    });
-};
-
-// Создание пользователя
-module.exports.createUser = (req, res) => {
-  const { name, about, avatar } = req.body;
-  User.create({ name, about, avatar })
-    .then((user) => res.status(201).send(user))
-    .catch((err) => {
-      if (err.name === 'ValidationError') {
-        res.status(400).send({
-          message: 'Переданы некорректные данные при создании пользователя.',
-        });
+        next(new BadRequestError('Передача некорректного ID'));
       } else {
-        res.status(500).send({ message: 'Ошибка по умолчанию' });
+        next(err);
       }
     });
-};
+}
+
+// Пользователь
+function getUserInfo(req, res, next) {
+  const { userId } = req.user;
+  User.findById(userId)
+    .then((user) => {
+      if (user) return res.send({ user });
+      throw new NotFoundError('Пользователь c указанным ID не найден');
+    })
+    .catch((err) => {
+      if (err.name === 'CastError') {
+        next(new BadRequestError('Передача некорректного ID'));
+      } else {
+        next(err);
+      }
+    });
+}
 
 // Редактирование данных пользователя
-module.exports.editProfileUserInfo = (req, res) => {
+function editProfileUserInfo(req, res, next) {
   const { name, about } = req.body;
+  const { userId } = req.user;
   User.findByIdAndUpdate(
-    req.user._id,
-    { name, about },
-    { new: true, runValidators: true },
-  ).orFail().then((user) => res.status(200).send(user))
+    userId,
+    {
+      name,
+      about,
+    },
+    {
+      new: true,
+      runValidators: true,
+    },
+  )
+    .then((user) => {
+      if (user) return res.send({ user });
+      throw new NotFoundError('Пользователь c указанным ID не найден');
+    })
     .catch((err) => {
-      if (err.name === 'CastError' || err.name === 'ValidationError') {
-        return res
-          .status(400)
-          .send({
-            message: 'Переданы некорректные данные при обновлении профиля',
-          });
+      if (err.name === 'ValidationError' || err.name === 'CastError') {
+        next(
+          new BadRequestError(
+            'Передача некорректных данных при попытке обновления профиля',
+          ),
+        );
+      } else {
+        next(err);
       }
-
-      if (err.name === 'DocumentNotFoundError') {
-        return res
-          .status(404)
-          .send({
-            message: 'Пользователь не найден',
-          });
-      }
-
-      return res.status(500).send({ message: 'Ошибка по умолчанию' });
     });
-};
+}
 
 // Редактирование аватара пользователя
-module.exports.updateProfileUserAvatar = (req, res) => {
+function updateProfileUserAvatar(req, res, next) {
   const { avatar } = req.body;
-  User.findByIdAndUpdate(req.user._id, { avatar }, { new: true })
-    .orFail().then((user) => res.status(200).send(user))
+  const { userId } = req.user;
+  User.findByIdAndUpdate(
+    userId,
+    {
+      avatar,
+    },
+    {
+      new: true,
+      runValidators: true,
+    },
+  )
+    .then((user) => {
+      if (user) return res.send({ user });
+      throw new NotFoundError('Пользователь c указанным ID не найден');
+    })
     .catch((err) => {
-      if (err.name === 'CastError' || err.name === 'ValidationError') {
-        return res
-          .status(400)
-          .send({
-            message: 'Переданы некорректные данные при обновлении аватара',
-          });
+      if (err.name === 'ValidationError' || err.name === 'CastError') {
+        next(
+          new BadRequestError(
+            'Передача некорректных данных при попытке обновления аватара',
+          ),
+        );
+      } else {
+        next(err);
       }
-
-      if (err.name === 'DocumentNotFoundError') {
-        return res
-          .status(404)
-          .send({
-            message: 'Пользователь не найден',
-          });
-      }
-
-      return res.status(500).send({ message: 'Ошибка по умолчанию' });
     });
+}
+
+module.exports = {
+  registrationUser,
+  login,
+  getUsersInfo,
+  getUserId,
+  getUserInfo,
+  editProfileUserInfo,
+  updateProfileUserAvatar,
 };
