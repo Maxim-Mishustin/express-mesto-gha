@@ -55,14 +55,16 @@ function registrationUser(req, res, next) {
 // Логин пользователя
 function login(req, res, next) {
   const { email, password } = req.body;
+
   User.findUserByCredentials(email, password)
     .then(({ _id: userId }) => {
-      if (userId) {
-        const token = jwt.sign({ userId }, authKey, {
-          expiresIn: '7d',
-        });
-        return res.send({ _id: token });
-      }
+      const token = jwt.sign({ userId }, authKey, {
+        expiresIn: '7d',
+      });
+
+      return res.send({ _id: token });
+    })
+    .catch(() => {
       throw new AuthenticationError('Неправильная почта или пароль');
     })
     .catch(next);
@@ -97,15 +99,13 @@ function getUserInfo(req, res, next) {
   const { userId } = req.user;
   User.findById(userId)
     .then((user) => {
-      if (user) return res.send({ user });
-      throw new NotFoundError('Пользователь c указанным ID не найден');
+      if (user) {
+        return res.send({ user });
+      }
+      throw new NotFoundError('Пользователь с указанным ID не найден');
     })
     .catch((err) => {
-      if (err.name === 'CastError') {
-        next(new BadRequestError('Передача некорректного ID'));
-      } else {
-        next(err);
-      }
+      next(err);
     });
 }
 
@@ -129,7 +129,7 @@ function editProfileUserInfo(req, res, next) {
       throw new NotFoundError('Пользователь c указанным ID не найден');
     })
     .catch((err) => {
-      if (err.name === 'ValidationError' || err.name === 'CastError') {
+      if (err.name === 'ValidationError') {
         next(
           new BadRequestError(
             'Передача некорректных данных при попытке обновления профиля',
@@ -160,7 +160,7 @@ function updateProfileUserAvatar(req, res, next) {
       throw new NotFoundError('Пользователь c указанным ID не найден');
     })
     .catch((err) => {
-      if (err.name === 'ValidationError' || err.name === 'CastError') {
+      if (err.name === 'ValidationError') {
         next(
           new BadRequestError(
             'Передача некорректных данных при попытке обновления аватара',

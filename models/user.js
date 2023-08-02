@@ -25,20 +25,15 @@ const userSchema = new Schema(
     name: {
       type: String,
       default: 'Жак-Ив Кусто',
-      validate: {
-        validator: ({ length }) => length >= 2 && length <= 30,
-        message: 'Имя пользователя должно быть длиной от 2 до 30 символов',
-      },
+      minlength: [2, 'Минимальная длина поля "name" - 2'],
+      maxlength: [30, 'Максимальная длина поля "name" - 30'],
     },
 
     about: {
       type: String,
       default: 'Исследователь',
-      validate: {
-        validator: ({ length }) => length >= 2 && length <= 30,
-        message:
-          'Информация о пользователе должна быть длиной от 2 до 30 символов',
-      },
+      minlength: [2, 'Минимальная длина поля "name" - 2'],
+      maxlength: [30, 'Максимальная длина поля "name" - 30'],
     },
 
     avatar: {
@@ -54,6 +49,7 @@ const userSchema = new Schema(
 
   {
     versionKey: false,
+    // Добавляем методы в статику
     statics: {
       findUserByCredentials(email, password) {
         return this.findOne({ email })
@@ -61,13 +57,13 @@ const userSchema = new Schema(
           .then((user) => {
             if (user) {
               return bcrypt.compare(password, user.password).then((matched) => {
-                if (matched) return user;
-
-                return Promise.reject();
+                if (matched) {
+                  return user;
+                }
+                throw new Error('Неправильные почта или пароль');
               });
             }
-
-            return Promise.reject();
+            throw new Error('Неправильные почта или пароль');
           });
       },
     },

@@ -78,7 +78,7 @@ function addLike(req, res, next) {
       throw new NotFoundError('Карточка c указанным id не найдена');
     })
     .catch((err) => {
-      if (err.name === 'ValidationError' || err.name === 'CastError') {
+      if (err.name === 'CastError') {
         next(
           new BadRequestError(
             'Переданы некорректные данные для постановки лайка.',
@@ -110,7 +110,7 @@ function removeLike(req, res, next) {
       throw new NotFoundError('Карточка c указанным id не найдена');
     })
     .catch((err) => {
-      if (err.name === 'ValidationError' || err.name === 'CastError') {
+      if (err.name === 'CastError') {
         next(
           new BadRequestError(
             'Переданы некорректные данные для удаления лайка.',
