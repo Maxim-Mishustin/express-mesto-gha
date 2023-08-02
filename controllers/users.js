@@ -6,7 +6,6 @@ const { authKey } = require('../utils/constants');
 const { CREATED_CODE } = require('../utils/constants');
 const BadRequestError = require('../errors/BadRequestError');
 const NotFoundError = require('../errors/NotFoundError');
-const AuthenticationError = require('../errors/AuthenticationError');
 const DataConflictError = require('../errors/DataConflictError');
 
 // Регистрация пользователя
@@ -63,9 +62,6 @@ function login(req, res, next) {
       });
 
       return res.send({ _id: token });
-    })
-    .catch(() => {
-      throw new AuthenticationError('Неправильная почта или пароль');
     })
     .catch(next);
 }

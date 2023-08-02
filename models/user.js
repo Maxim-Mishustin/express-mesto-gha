@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 const bcrypt = require('bcryptjs');
 const { urlRegex } = require('../utils/constants');
+const AuthenticationError = require('../errors/AuthenticationError');
 
 const userSchema = new Schema(
   {
@@ -60,10 +61,10 @@ const userSchema = new Schema(
                 if (matched) {
                   return user;
                 }
-                throw new Error('Неправильные почта или пароль');
+                throw new AuthenticationError('Неправильные почта или пароль');
               });
             }
-            throw new Error('Неправильные почта или пароль');
+            throw new AuthenticationError('Неправильные почта или пароль');
           });
       },
     },
